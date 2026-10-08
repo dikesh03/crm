@@ -10,6 +10,7 @@
     "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\" \"npm run dev:ai\"",
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:api": "npm run dev --workspace=apps/api",
+    "dev:cp": "npm run dev --workspace=apps/cp-portal",
     "dev:ai": "cd apps/ai && python -m uvicorn main:app --reload --port 8001",
     "build": "npm run build --workspaces --if-present",
     "build:web": "npm run build --workspace=apps/web",

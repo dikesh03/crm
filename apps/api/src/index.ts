@@ -51,6 +51,8 @@ import setupCompanySettingsRouter from './routes/setup/company-settings';
 import setupPersonalSettingsRouter from './routes/setup/personal-settings';
 import profileSecurityRouter from './routes/profileSecurity';
 import rrQueueRouter from './routes/rrQueues';
+import cpPortalRouter from './routes/cpPortal';
+import cpPortalAccountsRouter from './routes/cpPortalAccounts';
 
 export const createApp = () => {
   const app = express();
@@ -83,6 +85,8 @@ export const createApp = () => {
   });
 
   app.use('/api/auth', authRouter);
+  app.use('/api/cp-portal', cpPortalRouter);
+  app.use('/api/cp-portal-accounts', cpPortalAccountsRouter);
   app.use('/api/leads', leadRouter);
   app.use('/api/site-visits', siteVisitRouter);
   app.use('/api/opportunities', opportunityRouter);

@@ -262,7 +262,10 @@ router.post('/', authorize('User', 'create'), async (req: AuthRequest, res: Resp
     const data = inviteUserSchema.parse(req.body);
 
     if (data.profileId) {
-      const profile = await prisma.profile.findFirst({ where: { id: data.profileId, tenantId: req.tenantId! }, select: { id: true } });
+      const profile = await prisma.profile.findFirst({
+        where: { id: data.profileId, OR: [{ tenantId: req.tenantId! }, { isGlobal: true }] },
+        select: { id: true },
+      });
       if (!profile) return res.status(400).json({ success: false, error: 'Profile not found in this tenant' });
     }
     const roleIds = [...new Set([...(data.roleIds || []), ...(data.roleId ? [data.roleId] : [])])];
@@ -363,7 +366,10 @@ router.put('/:id', authorize('User', 'edit'), async (req: AuthRequest, res: Resp
     const data = updateUserSchema.parse(req.body);
 
     if (data.profileId) {
-      const profile = await prisma.profile.findFirst({ where: { id: data.profileId, tenantId: req.tenantId! }, select: { id: true } });
+      const profile = await prisma.profile.findFirst({
+        where: { id: data.profileId, OR: [{ tenantId: req.tenantId! }, { isGlobal: true }] },
+        select: { id: true },
+      });
       if (!profile) return res.status(400).json({ success: false, error: 'Profile not found in this tenant' });
     }
     const roleIds = data.roleIds ?? (data.roleId ? [data.roleId] : undefined);
@@ -598,12 +604,24 @@ router.put('/:id/profile', authorize('User', 'edit'), async (req: AuthRequest, r
   try {
     const { profileId } = req.body;
 
+    if (profileId !== undefined && profileId !== null && typeof profileId !== 'string') {
+      return res.status(400).json({ success: false, error: 'profileId must be a string or null' });
+    }
+
     const existingUser = await prisma.user.findFirst({
       where: { id: req.params.id, tenantId: req.tenantId! },
     });
 
     if (!existingUser) {
       return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (profileId) {
+      const profile = await prisma.profile.findFirst({
+        where: { id: profileId, OR: [{ tenantId: req.tenantId! }, { isGlobal: true }] },
+        select: { id: true },
+      });
+      if (!profile) return res.status(400).json({ success: false, error: 'Profile not found in this tenant' });
     }
 
     if (profileId && profileId !== existingUser.profileId) {

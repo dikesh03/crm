@@ -86,19 +86,8 @@ import {
 interface ProfileOption {
   id: string;
   name: string;
+  isGlobal?: boolean;
 }
-
-const PROFILES: ProfileOption[] = [
-  { id: "", name: "Marketing" },
-  { id: "", name: "Presales" },
-  { id: "", name: "SVC" },
-  { id: "", name: "Sales" },
-  { id: "", name: "CRM" },
-  { id: "", name: "Finance" },
-  { id: "", name: "Recovery" },
-  { id: "", name: "Manager" },
-  { id: "", name: "Admin" },
-];
 
 interface User {
   id: string;
@@ -201,12 +190,18 @@ export default function UsersPage() {
 
   React.useEffect(() => {
     fetchUsers();
-    profileApi.list().then((res) => {
+    profileApi.list({ limit: 200 }).then((res) => {
       const raw = res.data;
       const data = Array.isArray(raw) ? raw : (raw as any)?.data ?? (raw as any)?.profiles ?? [];
-      setAvailableProfiles(data.map((p: any) => ({ id: p.id, name: p.name })));
-    }).catch(() => {});
-  }, [fetchUsers]);
+      setAvailableProfiles(data.map((p: any) => ({ id: p.id, name: p.name, isGlobal: p.isGlobal })));
+    }).catch((err: any) => {
+      toast({
+        title: "Unable to load profiles",
+        description: err?.response?.data?.error || err?.message || "Failed to fetch profiles",
+        variant: "destructive" as any,
+      });
+    });
+  }, [fetchUsers, toast]);
 
   const filteredUsers = React.useMemo(() => {
     if (!searchQuery) return users;
@@ -713,7 +708,7 @@ export default function UsersPage() {
                   <SelectContent>
                     {availableProfiles.map((profile) => (
                       <SelectItem key={profile.id} value={profile.id}>
-                        {profile.name}
+                        {profile.name}{profile.isGlobal ? " (Shared)" : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>

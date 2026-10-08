@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { prisma } from '@dct-crm/db';
 import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -7,6 +7,11 @@ import { requirePermission } from '../middleware/permissions';
 const router = Router();
 
 router.use(authenticate);
+
+const requireProfileCreateAccess = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (req.user?.isAdmin) return next();
+  return requirePermission('PROFILE_CREATE')(req, res, next);
+};
 
 const leadStatusAccessSchema = z.object({
   statuses: z.array(z.string()).optional(),
@@ -28,20 +33,24 @@ router.get('/', requirePermission('PROFILE_READ'), async (req: AuthRequest, res:
     const { page = 1, limit = 20, search, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
 
-    const where: any = { tenantId: req.tenantId! };
+    const where: any = {
+      OR: [{ tenantId: req.tenantId! }, { isGlobal: true }],
+    };
     if (search) {
-      where.OR = [
-        { name: { contains: search as string, mode: 'insensitive' } },
-        { description: { contains: search as string, mode: 'insensitive' } },
-      ];
+      where.AND = [{
+        OR: [
+          { name: { contains: search as string, mode: 'insensitive' } },
+          { description: { contains: search as string, mode: 'insensitive' } },
+        ],
+      }];
     }
 
     const [profiles, total] = await Promise.all([
       prisma.profile.findMany({
         where,
         include: {
-          permissionSets: true,
-          _count: { select: { users: true } },
+          permissionSets: { where: { tenantId: req.tenantId! } },
+          _count: { select: { users: { where: { tenantId: req.tenantId! } } } },
         },
         skip,
         take: Number(limit),
@@ -69,13 +78,17 @@ router.get('/', requirePermission('PROFILE_READ'), async (req: AuthRequest, res:
 router.get('/:id', requirePermission('PROFILE_READ'), async (req: AuthRequest, res: Response) => {
   try {
     const profile = await prisma.profile.findFirst({
-      where: { id: req.params.id, tenantId: req.tenantId! },
+      where: {
+        id: req.params.id,
+        OR: [{ tenantId: req.tenantId! }, { isGlobal: true }],
+      },
       include: {
-        permissionSets: true,
+        permissionSets: { where: { tenantId: req.tenantId! } },
         users: {
+          where: { tenantId: req.tenantId! },
           select: { id: true, firstName: true, lastName: true, email: true },
         },
-        _count: { select: { users: true } },
+        _count: { select: { users: { where: { tenantId: req.tenantId! } } } },
       },
     });
 
@@ -90,16 +103,18 @@ router.get('/:id', requirePermission('PROFILE_READ'), async (req: AuthRequest, r
   }
 });
 
-router.post('/', requirePermission('PROFILE_CREATE'), async (req: AuthRequest, res: Response) => {
+router.post('/', requireProfileCreateAccess, async (req: AuthRequest, res: Response) => {
   try {
     const data = profileSchema.parse(req.body);
 
-    if (data.isAdmin !== undefined && !req.user!.isSuperAdmin) {
+    if (data.isAdmin === true && !req.user!.isSuperAdmin) {
       return res.status(403).json({ success: false, error: 'Only Super Admin can change administrator status' });
     }
 
     const existingProfile = await prisma.profile.findFirst({
-      where: { tenantId: req.tenantId!, name: data.name },
+      where: req.user!.isSuperAdmin
+        ? { name: data.name }
+        : { name: data.name, OR: [{ tenantId: req.tenantId! }, { isGlobal: true }] },
     });
 
     if (existingProfile) {
@@ -113,6 +128,7 @@ router.post('/', requirePermission('PROFILE_CREATE'), async (req: AuthRequest, r
         description: data.description,
         isDefault: data.isDefault ?? false,
         isAdmin: data.isAdmin ?? false,
+        isGlobal: req.user!.isSuperAdmin,
         leadStatusAccess: data.leadStatusAccess ?? undefined,
       },
     });
@@ -141,11 +157,18 @@ router.post('/', requirePermission('PROFILE_CREATE'), async (req: AuthRequest, r
 router.put('/:id', requirePermission('PROFILE_UPDATE'), async (req: AuthRequest, res: Response) => {
   try {
     const existingProfile = await prisma.profile.findFirst({
-      where: { id: req.params.id, tenantId: req.tenantId! },
+      where: {
+        id: req.params.id,
+        OR: [{ tenantId: req.tenantId! }, { isGlobal: true }],
+      },
     });
 
     if (!existingProfile) {
       return res.status(404).json({ success: false, error: 'Profile not found' });
+    }
+
+    if (existingProfile.isGlobal && !req.user!.isSuperAdmin) {
+      return res.status(403).json({ success: false, error: 'Only Super Admin can modify a shared profile' });
     }
 
     if (existingProfile.isDefault) {
@@ -160,7 +183,13 @@ router.put('/:id', requirePermission('PROFILE_UPDATE'), async (req: AuthRequest,
 
     if (data.name && data.name !== existingProfile.name) {
       const duplicateProfile = await prisma.profile.findFirst({
-        where: { tenantId: req.tenantId!, name: data.name, id: { not: req.params.id } },
+        where: existingProfile.isGlobal
+          ? { name: data.name, id: { not: req.params.id } }
+          : {
+              name: data.name,
+              id: { not: req.params.id },
+              OR: [{ tenantId: req.tenantId! }, { isGlobal: true }],
+            },
       });
 
       if (duplicateProfile) {
@@ -205,11 +234,18 @@ router.put('/:id', requirePermission('PROFILE_UPDATE'), async (req: AuthRequest,
 router.delete('/:id', requirePermission('PROFILE_DELETE'), async (req: AuthRequest, res: Response) => {
   try {
     const existingProfile = await prisma.profile.findFirst({
-      where: { id: req.params.id, tenantId: req.tenantId! },
+      where: {
+        id: req.params.id,
+        OR: [{ tenantId: req.tenantId! }, { isGlobal: true }],
+      },
     });
 
     if (!existingProfile) {
       return res.status(404).json({ success: false, error: 'Profile not found' });
+    }
+
+    if (existingProfile.isGlobal && !req.user!.isSuperAdmin) {
+      return res.status(403).json({ success: false, error: 'Only Super Admin can delete a shared profile' });
     }
 
     if (existingProfile.isDefault) {

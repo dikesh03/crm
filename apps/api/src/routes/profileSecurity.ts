@@ -114,7 +114,7 @@ const updateSecuritySchema = z.object({
 router.get('/:profileId/security', requirePermission('PROFILE_READ'), async (req: AuthRequest, res: Response) => {
   try {
     const profile = await prisma.profile.findFirst({
-      where: { id: req.params.profileId, tenantId: req.tenantId! },
+      where: { id: req.params.profileId, OR: [{ tenantId: req.tenantId! }, { isGlobal: true }] },
       select: { id: true, name: true, description: true, isAdmin: true, leadStatusAccess: true },
     });
     if (!profile) return res.status(404).json({ success: false, error: 'Profile not found' });
@@ -152,8 +152,14 @@ router.get('/:profileId/security', requirePermission('PROFILE_READ'), async (req
 router.put('/:profileId/security', requirePermission('PROFILE_PERMISSION_MANAGE'), async (req: AuthRequest, res: Response) => {
   try {
     const data = updateSecuritySchema.parse(req.body);
-    const profile = await prisma.profile.findFirst({ where: { id: req.params.profileId, tenantId: req.tenantId! }, select: { id: true, leadStatusAccess: true } });
+    const profile = await prisma.profile.findFirst({
+      where: { id: req.params.profileId, OR: [{ tenantId: req.tenantId! }, { isGlobal: true }] },
+      select: { id: true, isGlobal: true, leadStatusAccess: true },
+    });
     if (!profile) return res.status(404).json({ success: false, error: 'Profile not found' });
+    if (profile.isGlobal && !req.user!.isSuperAdmin) {
+      return res.status(403).json({ success: false, error: 'Only Super Admin can modify shared profile security' });
+    }
 
     if (data.objectPermissions?.length) {
       const objectIds = [...new Set(data.objectPermissions.map((item) => item.objectId))];
@@ -203,11 +209,11 @@ router.put('/:profileId/security', requirePermission('PROFILE_PERMISSION_MANAGE'
 
     await prisma.$transaction(async (tx) => {
       if (data.objectPermissions) {
-        await tx.profileObjectPermission.deleteMany({ where: { profileId: profile.id } });
+        await tx.profileObjectPermission.deleteMany({ where: { profileId: profile.id, tenantId: req.tenantId! } });
         if (normalizedObjectPermissions.length) await tx.profileObjectPermission.createMany({ data: normalizedObjectPermissions.map((item) => ({ ...item, profileId: profile.id, tenantId: req.tenantId! })) });
       }
       if (data.fieldPermissions) {
-        await tx.profileFieldPermission.deleteMany({ where: { profileId: profile.id } });
+        await tx.profileFieldPermission.deleteMany({ where: { profileId: profile.id, tenantId: req.tenantId! } });
         if (data.fieldPermissions.length) await tx.profileFieldPermission.createMany({ data: data.fieldPermissions.map((item) => ({ ...item, profileId: profile.id, tenantId: req.tenantId! })) });
       }
       if (data.permissionIds) {

@@ -114,6 +114,7 @@ import {
 interface ProfileOption {
   id: string;
   name: string;
+  isGlobal?: boolean;
 }
 
 interface RoleOption {
@@ -548,6 +549,7 @@ export default function UsersPage() {
           getResponseData(profilesResult.value).map((profile: any) => ({
             id: profile.id,
             name: profile.name,
+            isGlobal: profile.isGlobal,
           }))
         );
       }
@@ -2182,7 +2184,7 @@ export default function UsersPage() {
                             profile.id
                           }
                         >
-                          {profile.name}
+                          {profile.name}{profile.isGlobal ? " (Shared)" : ""}
                         </SelectItem>
                       )
                     )}

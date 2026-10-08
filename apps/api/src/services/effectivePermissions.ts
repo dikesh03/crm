@@ -202,7 +202,11 @@ export class EffectivePermissionService {
 
     const [profilePerms, objectPerms] = await Promise.all([
       prisma.userProfilePermission.findMany({
-        where: { profileId, permission: { isActive: true }, ...(tenantId ? { profile: { tenantId } } : {}) },
+        where: {
+          profileId,
+          permission: { isActive: true },
+          ...(tenantId ? { profile: { is: { OR: [{ tenantId }, { isGlobal: true }] } } } : {}),
+        },
         include: { permission: true },
       }),
       prisma.profileObjectPermission.findMany({

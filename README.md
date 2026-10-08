@@ -12,6 +12,7 @@ Enterprise Multi-Tenant CRM with dynamic object management, role-based access co
 ## Features
 
 - Multi-tenant architecture with Super Admin
+- Super Admin can create shared profiles that are visible and assignable across tenant companies
 - Dynamic Object Manager (create custom objects/fields at runtime)
 - Role-based access control (RBAC) with profiles, permission sets, and direct permissions
 - 100 granular permissions across 20 modules
@@ -41,6 +42,8 @@ npm run dev
 cd apps/web
 npm run dev
 ```
+
+For existing databases, apply `packages/db/migrations/add-global-profiles.sql` before deploying the updated API.
 
 ## Login Credentials
 
@@ -100,6 +103,44 @@ Local service URLs:
 - API: `http://localhost:3001`
 - AI: `http://localhost:8001`
 
+## Channel Partner Portal
+
+The standalone CP Portal UI is available at `http://localhost:3002/login`.
+It has its own routes, navigation and `cp_token` HTTP-only session cookie; signing
+out of the portal does not clear the CRM `token` cookie. CP Portal accounts are
+standalone records and do not require or share CRM user credentials. Each account
+has its own Channel Partner name, username, email, and password; passwords are
+stored as hashes and never returned from the CRM management API. The API derives
+the partner identity from the authenticated CP account and scopes lead reads,
+notes, dashboard results and exports to that account's leads.
+
+CRM administrators can create, edit, disable, and reset these credentials from
+**Setup Home → CP Portal Accounts**. Create one record per Channel Partner; the
+API prevents duplicate usernames and email addresses within a tenant. CP users
+can sign in with either their portal username or email. The current password is
+intentionally not readable; save a new password to replace it.
+
+CP Portal fields and partner notes add columns and a table to the existing CRM
+Prisma schema. After pulling these changes, update the existing database and
+generate the Prisma client:
+
+```bash
+npm run db:push
+npm run db:generate
+```
+
+Run the existing CRM API and web workspaces (`npm run dev:api` and
+`npm run dev:web`, or `npm run dev`), then start the separate CP Portal site
+with `npm run dev:cp`. Open the CP Portal URL above. Its same-origin API proxy
+forwards to the CRM backend using `BACKEND_URL` (default
+`http://localhost:3001`); the backend uses the existing `DATABASE_URL` and
+`JWT_SECRET` settings.
+
+Before database-backed sign-in, configure `DATABASE_URL` and `JWT_SECRET` in
+the CRM's local `.env`, run the schema commands above, and create a standalone
+CP Portal account from the admin page. Do not paste database credentials into
+source control.
+
 ### Lead API test users
 
 Lead creation is allowed for:
@@ -126,6 +167,7 @@ Lead creation is denied for negative API tests using:
 dct-crm/
 ├── apps/
 │   ├── api/          # Express.js backend
+│   ├── cp-portal/    # Independent Channel Partner website
 │   └── web/          # Next.js frontend
 ├── packages/
 │   ├── db/           # Prisma schema & migrations

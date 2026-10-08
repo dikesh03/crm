@@ -71,6 +71,7 @@ describe('role-based sidebar matrix', () => {
       'Home', 'Leads', 'Site Visits', 'Opportunities', 'Quotations', 'Bookings', 'Payments',
       'Projects', 'Tasks', 'Pre Sales', 'Sales', 'SVC', 'Reports', 'Setup Home',
     ]);
+    expect(nav.some((item) => item.title === 'CP Portal Accounts')).toBe(false);
     expect(nav.some((item) => item.title === 'Pre Sales' && item.href === '/profiles/pre-sales')).toBe(true);
     expect(nav.some((item) => item.title === 'Sales' && item.href === '/profiles/sales')).toBe(true);
     expect(nav.some((item) => item.title === 'SVC' && item.href === '/profiles/svc')).toBe(true);
@@ -93,5 +94,6 @@ describe('role-based sidebar matrix', () => {
       'Home', 'Companies', 'Leads', 'Site Visits', 'Opportunities', 'Quotations', 'Bookings',
       'Payments', 'Projects', 'Tasks', 'Reports', 'Setup Home',
     ]);
+    expect(nav.some((item) => item.title === 'CP Portal Accounts')).toBe(false);
   });
 });

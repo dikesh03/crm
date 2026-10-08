@@ -76,6 +76,7 @@ interface Profile {
   id: string;
   name: string;
   description?: string;
+  isGlobal?: boolean;
   usersCount?: number;
   status: "active" | "inactive";
   leadStatusAccess?: string[];
@@ -132,9 +133,14 @@ function ProfilesPageContent() {
     try {
       setLoading(true);
       setError(null);
-      const response = await profileApi.list();
+      const response = await profileApi.list({ limit: 100 });
       const data = response.data;
-      setProfiles(Array.isArray(data) ? data : (data as any)?.data ?? (data as any)?.profiles ?? []);
+      const profileData = Array.isArray(data) ? data : (data as any)?.data ?? (data as any)?.profiles ?? [];
+      setProfiles(profileData.map((profile: any) => ({
+        ...profile,
+        usersCount: profile._count?.users ?? 0,
+        status: profile.status ?? (profile.isActive === false ? "inactive" : "active"),
+      })));
     } catch (err: any) {
       setError(err?.message || "Failed to fetch profiles");
       toast({ title: "Error", description: "Failed to fetch profiles", variant: "destructive" as any });
@@ -416,7 +422,10 @@ function ProfilesPageContent() {
                 <TableBody>
                   {filteredProfiles.map((profile) => (
                     <TableRow key={profile.id}>
-                      <TableCell className="font-medium">{profile.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {profile.name}
+                        {profile.isGlobal && <Badge variant="outline" className="ml-2">Shared</Badge>}
+                      </TableCell>
                       <TableCell className="text-muted-foreground max-w-xs truncate">
                         {profile.description || "-"}
                       </TableCell>

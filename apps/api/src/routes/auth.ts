@@ -52,6 +52,19 @@ router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
 
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({
+        success: false,
+        error: 'CRM database is not configured. Add DATABASE_URL to the CRM .env file and restart the API.',
+      });
+    }
+    if (!process.env.JWT_SECRET) {
+      return res.status(503).json({
+        success: false,
+        error: 'CRM authentication is not configured. Add JWT_SECRET to the CRM .env file and restart the API.',
+      });
+    }
+
     const user = await prisma.user.findFirst({
       where: { email, isActive: true },
       include: {
@@ -151,13 +164,40 @@ router.post('/login', async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    const errorCode = error && typeof error === 'object' && 'code' in error
-      ? String(error.code)
+    const errorCode = error && typeof error === 'object'
+      ? 'errorCode' in error
+        ? String(error.errorCode)
+        : 'code' in error
+          ? String(error.code)
+          : undefined
       : undefined;
     const errorDetail = error instanceof TypeError ? error.message : error instanceof Error ? error.name : 'Unknown error';
     console.error('Login failed:', errorDetail, errorCode);
     if (error.name === 'ZodError') {
       return res.status(400).json({ success: false, error: error.errors[0].message });
+    }
+    if (error instanceof Error && error.message.includes('Environment variable not found: DATABASE_URL')) {
+      return res.status(503).json({
+        success: false,
+        error: 'CRM database is not configured. Add DATABASE_URL to the CRM .env file and restart the API.',
+      });
+    }
+    if (['P1000', 'P1001', 'P1002', 'P1010'].includes(errorCode || '')) {
+      return res.status(503).json({
+        success: false,
+        error: errorCode === 'P1000'
+          ? 'PostgreSQL rejected the credentials in DATABASE_URL. Update the local CRM .env with the correct database password.'
+          : 'Unable to connect to the CRM database. Check DATABASE_URL and confirm PostgreSQL is running.',
+      });
+    }
+    if (
+      error instanceof Error &&
+      error.message.includes('Authentication failed against database server')
+    ) {
+      return res.status(503).json({
+        success: false,
+        error: 'PostgreSQL rejected the credentials in DATABASE_URL. Update the local CRM .env with the correct database password.',
+      });
     }
     res.status(500).json({ success: false, error: 'Login failed' });
   }

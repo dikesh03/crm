@@ -10,6 +10,7 @@ import {
   ClipboardList,
   FileKey2,
   GitBranch,
+  Globe,
   KeyRound,
   LayoutTemplate,
   Mail,
@@ -36,6 +37,20 @@ const groups = [
       { label: "Profiles", href: "/setup/security/profiles", icon: ShieldCheck },
       { label: "Permission Sets", href: "/setup/security/permission-sets", icon: KeyRound },
       { label: "Roles", href: "/setup/security/roles", icon: GitBranch },
+    ],
+  },
+  {
+    title: "Channel Partner Portal",
+    description: "Manage Channel Partner Portal access and credentials.",
+    items: [
+      { label: "CP Portal Accounts", href: "/cp-portal-accounts", icon: KeyRound },
+    ],
+  },
+  {
+    title: "Sites",
+    description: "Open connected portals.",
+    items: [
+      { label: "CP Portal", href: "http://localhost:3002/login", icon: Globe, external: true },
     ],
   },
   {
@@ -100,6 +115,8 @@ export default function SetupPage() {
                   <Link
                     key={item.label}
                     href={item.href}
+                    target={"external" in item && item.external ? "_blank" : undefined}
+                    rel={"external" in item && item.external ? "noopener noreferrer" : undefined}
                     className="flex items-center gap-3 py-3 text-sm transition-colors hover:text-primary"
                   >
                     <Icon className="h-4 w-4 text-muted-foreground" />

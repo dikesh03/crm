@@ -14,7 +14,7 @@ const setProfilePermissionsSchema = z.object({
 router.get('/:profileId/permissions', requirePermission('PROFILE_READ'), async (req: AuthRequest, res: Response) => {
   try {
     const profile = await prisma.profile.findFirst({
-      where: { id: req.params.profileId, tenantId: req.tenantId! },
+      where: { id: req.params.profileId, OR: [{ tenantId: req.tenantId! }, { isGlobal: true }] },
     });
 
     if (!profile) {
@@ -37,11 +37,14 @@ router.get('/:profileId/permissions', requirePermission('PROFILE_READ'), async (
 router.put('/:profileId/permissions', requirePermission('PROFILE_PERMISSION_MANAGE'), async (req: AuthRequest, res: Response) => {
   try {
     const profile = await prisma.profile.findFirst({
-      where: { id: req.params.profileId, tenantId: req.tenantId! },
+      where: { id: req.params.profileId, OR: [{ tenantId: req.tenantId! }, { isGlobal: true }] },
     });
 
     if (!profile) {
       return res.status(404).json({ success: false, error: 'Profile not found' });
+    }
+    if (profile.isGlobal && !req.user!.isSuperAdmin) {
+      return res.status(403).json({ success: false, error: 'Only Super Admin can modify shared profile permissions' });
     }
 
     const data = setProfilePermissionsSchema.parse(req.body);
@@ -94,11 +97,14 @@ router.put('/:profileId/permissions', requirePermission('PROFILE_PERMISSION_MANA
 router.post('/:profileId/permissions', requirePermission('PROFILE_PERMISSION_MANAGE'), async (req: AuthRequest, res: Response) => {
   try {
     const profile = await prisma.profile.findFirst({
-      where: { id: req.params.profileId, tenantId: req.tenantId! },
+      where: { id: req.params.profileId, OR: [{ tenantId: req.tenantId! }, { isGlobal: true }] },
     });
 
     if (!profile) {
       return res.status(404).json({ success: false, error: 'Profile not found' });
+    }
+    if (profile.isGlobal && !req.user!.isSuperAdmin) {
+      return res.status(403).json({ success: false, error: 'Only Super Admin can modify shared profile permissions' });
     }
 
     const { permissionIds } = req.body;
@@ -141,8 +147,14 @@ router.post('/:profileId/permissions', requirePermission('PROFILE_PERMISSION_MAN
 
 router.delete('/:profileId/permissions/:permissionId', requirePermission('PROFILE_PERMISSION_MANAGE'), async (req: AuthRequest, res: Response) => {
   try {
-    const profile = await prisma.profile.findFirst({ where: { id: req.params.profileId, tenantId: req.tenantId! }, select: { id: true } });
+    const profile = await prisma.profile.findFirst({
+      where: { id: req.params.profileId, OR: [{ tenantId: req.tenantId! }, { isGlobal: true }] },
+      select: { id: true, isGlobal: true },
+    });
     if (!profile) return res.status(404).json({ success: false, error: 'Profile not found' });
+    if (profile.isGlobal && !req.user!.isSuperAdmin) {
+      return res.status(403).json({ success: false, error: 'Only Super Admin can modify shared profile permissions' });
+    }
 
     const deleted = await prisma.userProfilePermission.deleteMany({
       where: { profileId: req.params.profileId, permissionId: req.params.permissionId },
